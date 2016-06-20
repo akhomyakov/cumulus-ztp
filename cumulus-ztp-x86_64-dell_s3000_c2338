@@ -1,0 +1,69 @@
+#!/bin/bash
+function error() {
+  echo -e "\e[0;33mERROR: The Zero Touch Provisioning script failed while running the command $BASH_COMMAND at line $BASH_LINENO.\e[0m" >&2
+  exit 1
+}
+ 
+# Log all output from this script
+exec >/var/log/autoprovision 2>&1
+ 
+trap error ERR
+ 
+#Add Debian Repositories
+echo "deb http://http.us.debian.org/debian wheezy main" >> /etc/apt/sources.list
+echo "deb http://security.debian.org/ wheezy/updates main" >> /etc/apt/sources.list
+
+#Add Debian Repositories (Cumulus 3.0 is jessie)
+#echo "deb http://http.us.debian.org/debian jessie main" >> /etc/apt/sources.list
+#echo "deb http://security.debian.org/ jessie/updates main" >> /etc/apt/sources.list
+ 
+#Update Package Cache
+#apt-get update -y
+ 
+#Install netshow diagnostics commands
+#apt-get install -y netshow htop nmap
+ 
+#Install a License from usb and restart switchd
+/usr/cumulus/bin/cl-license -i $ZTP_USB_MOUNTPOINT/CumulusConfigs/cl-license.txt
+
+#Load port config from usb
+#   (if breakout cables are used for certain interfaces)
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/ports.conf /etc/cumulus/ports.conf
+
+#Load interface config from usb
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/interfaces /etc/network/interfaces
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/interfaces.d/*.intf /etc/network/interfaces.d/
+
+#Copy provision.cron.sh to /opt/scripts and schedule it to run in cron
+mkdir /opt/scripts
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/provision.cron.sh /opt/scripts/
+chmod 755 /opt/scripts/provision.cron.sh
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/provision.cron.job /etc/cron.d/provision
+chmod 644 /etc/cron.d/provision
+
+#Restart switchd to load the license
+if service switchd status &>/dev/null; then service switchd restart; fi
+if ! service switchd status &>/dev/null; then service switchd start; fi
+
+#Reload interfaces to apply loaded config
+ifreload -a
+
+#Output state of interfaces
+netshow interface
+
+#Copy ntp configurations, update timezone and restart ntp service
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/ntp.conf /etc/ntp.conf
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/timezone /etc/timezone
+dpkg-reconfigure --frontend noninteractive tzdata
+if service ntp status &>/dev/null; then service ntp restart; fi
+if ! service ntp status &>/dev/null; then service ntp start; fi
+
+#Copy MOTD banner
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/motd /etc/motd
+
+#Change default password for Cumulus local account
+echo "cumulus:NewMagicPassword"|chpasswd
+
+
+# CUMULUS-AUTOPROVISIONING
+exit 0
