@@ -1,0 +1,7 @@
+# Leave this and swp51 at auto/auto, but ports swp49 and swp52 are 1G/full. This way at least one will come up.
+auto swp50
+iface swp50
+    mtu 9000
+#    link-speed 1000
+#    link-duplex full
+#    link-autoneg on

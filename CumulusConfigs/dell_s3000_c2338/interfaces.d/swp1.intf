@@ -1,0 +1,4 @@
+auto swp1
+iface swp1
+   mtu 9000
+   bridge-access 549

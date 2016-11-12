@@ -1,0 +1,8 @@
+auto bridge
+iface bridge
+	bridge-vlan-aware yes
+	bridge-ports glob swp1-52
+	bridge-vids 1-555
+	bridge-pvid 1
+	bridge-ageing 300
+	bridge-stp on

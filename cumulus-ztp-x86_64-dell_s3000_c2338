@@ -1,4 +1,10 @@
 #!/bin/bash
+# New account to add with sudo rights
+localuser="god"
+localuserpassword="password"
+# Set new password for local cumulus user account
+cumulususerpassword="CumulusPassword"
+
 function error() {
   echo -e "\e[0;33mERROR: The Zero Touch Provisioning script failed while running the command $BASH_COMMAND at line $BASH_LINENO.\e[0m" >&2
   exit 1
@@ -8,32 +14,32 @@ function error() {
 exec >/var/log/autoprovision 2>&1
  
 trap error ERR
- 
-#Add Debian Repositories
-echo "deb http://http.us.debian.org/debian wheezy main" >> /etc/apt/sources.list
-echo "deb http://security.debian.org/ wheezy/updates main" >> /etc/apt/sources.list
 
-#Add Debian Repositories (Cumulus 3.0 is jessie)
-#echo "deb http://http.us.debian.org/debian jessie main" >> /etc/apt/sources.list
-#echo "deb http://security.debian.org/ jessie/updates main" >> /etc/apt/sources.list
+echo "### Adding Debian Jessie Repositories to sources.list (Cumulus 3.0 is jessie) ###"
+echo "deb http://http.us.debian.org/debian jessie main" >> /etc/apt/sources.list
+echo "deb http://security.debian.org/ jessie/updates main" >> /etc/apt/sources.list
  
-#Update Package Cache
-#apt-get update -y
- 
-#Install netshow diagnostics commands
-#apt-get install -y netshow htop nmap
- 
-#Install a License from usb and restart switchd
+echo "### Installing License from USB ###"
 /usr/cumulus/bin/cl-license -i $ZTP_USB_MOUNTPOINT/CumulusConfigs/cl-license.txt
 
-#Load port config from usb
+echo "### Loading port config from USB ###"
 #   (if breakout cables are used for certain interfaces)
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/ports.conf /etc/cumulus/ports.conf
 
-#Load interface config from usb
+echo "### Loading interface config from USB ###"
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/interfaces /etc/network/interfaces
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/interfaces.d/*.intf /etc/network/interfaces.d/
 
+# Use HW address of eth0 to be the MAC address of the bridge interface instead of MAC address of the first intf in the bridge
+# This is useful because MAC of eth0 is printed on the box, so DHCP reservation can be made without powering up the switch
+echo "### Learning MAC address of eth0 and adding it to vlan.intf ###"
+echo "    #HW Address from Eth0 interface" >> /etc/network/interfaces.d/vlan.intf
+echo "    hwaddress $(ip -o link show eth0 | cut -d " " -f 20)" >> /etc/network/interfaces.d/vlan.intf
+
+echo "### Copying MOTD banner from USB ###"
+cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/motd /etc/motd
+
+echo "### Moving Cronjob over from USB ###"
 #Copy provision.cron.sh to /opt/scripts and schedule it to run in cron
 mkdir /opt/scripts
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/provision.cron.sh /opt/scripts/
@@ -41,29 +47,41 @@ chmod 755 /opt/scripts/provision.cron.sh
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/dell_s3000_c2338/provision.cron.job /etc/cron.d/provision
 chmod 644 /etc/cron.d/provision
 
-#Restart switchd to load the license
-if service switchd status &>/dev/null; then service switchd restart; fi
-if ! service switchd status &>/dev/null; then service switchd start; fi
+echo "### Restarting Switchd... ###"
+#Restart switchd to load the license (Cumulus 2.5 style)
+#if service switchd status &>/dev/null; then service switchd restart; fi
+#if ! service switchd status &>/dev/null; then service switchd start; fi
 
-#Reload interfaces to apply loaded config
+#Restart switchd to load the license (Cumulus 3.0 style)
+/bin/systemctl restart switchd.service
+
+echo "### Applying Interface Configuration... ###"
 ifreload -a
 
-#Output state of interfaces
+echo "### Current State of Interfaces ###"
 netshow interface
 
+echo "### Configuring NTP settings ###"
 #Copy ntp configurations, update timezone and restart ntp service
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/ntp.conf /etc/ntp.conf
 cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/timezone /etc/timezone
 dpkg-reconfigure --frontend noninteractive tzdata
-if service ntp status &>/dev/null; then service ntp restart; fi
-if ! service ntp status &>/dev/null; then service ntp start; fi
+#Restart NTP (Cumulus 2.5 style)
+#if service ntp status &>/dev/null; then service ntp restart; fi
+#if ! service ntp status &>/dev/null; then service ntp start; fi
+#Restart NTP (Cumulus 3.0 style)
+/bin/systemctl restart ntp.service
 
-#Copy MOTD banner
-cp $ZTP_USB_MOUNTPOINT/CumulusConfigs/common/motd /etc/motd
-
+echo "### Modifying Usernames and Passwords... ###"
 #Change default password for Cumulus local account
-echo "cumulus:NewMagicPassword"|chpasswd
+echo "cumulus:$cumulususerpassword"|chpasswd
+#Create local user, its homedir, change passwd, add to sudo
+useradd $localuser
+mkdir /home/$localuser
+chown $localuser:$localuser /home/$localuser
+echo "$localuser:$localuserpassword"|chpasswd
+usermod -a -G sudo $localuser
 
-
-# CUMULUS-AUTOPROVISIONING
+echo "### Done with ZTP script. Exiting... ###"
 exit 0
+# CUMULUS-AUTOPROVISIONING

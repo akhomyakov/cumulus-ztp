@@ -1,0 +1,2 @@
+auto bridge.555
+iface bridge.555 inet dhcp

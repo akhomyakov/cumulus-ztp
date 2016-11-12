@@ -1,0 +1,12 @@
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5), ifup(8)
+#
+# Please see /usr/share/doc/python-ifupdown2/examples/ for examples
+#
+#
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+source /etc/network/interfaces.d/*.intf
