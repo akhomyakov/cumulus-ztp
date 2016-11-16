@@ -79,6 +79,7 @@ PS3="$prompt "
 select opt in "y" "Abort"; do
     # If "Abort" (choice 2) is picked, exit out of the script
     if (( REPLY == 2 )) ; then
+        clean_up_dir
         exit
     # if "y" (choice 1) is picked, sleep for 5 sec just in case and break out of the 'select' routine.
     elif (( REPLY == 1 )) ; then
